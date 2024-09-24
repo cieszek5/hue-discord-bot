@@ -1,12 +1,7 @@
 import discord
-from discord.ext import commands
+from discord import app_commands
 import requests
 import logging
-import os
-
-
-
-
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -20,17 +15,14 @@ HUE_REFRESH_TOKEN = "Put here" #Refresh Token from Setup 1 file.
 DISCORD_CHANNEL_ID = Channel_ID  # Channel that bot will post to. Remember to not put this in quotes
 HUE_APPLICATION_KEY = "Put here" #Username from Setup 3 file.
 
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Initialize the bot with no privileged intents
+bot = discord.Client(intents=discord.Intents.default())
+tree = app_commands.CommandTree(bot)
 
 # Store the access token globally
 access_token = None
-
-# Store light and group information
-lights = {}
-groups = {}
+lights = {}  # Store light information
+groups = {}  # Store group information
 
 
 async def get_access_token():
@@ -52,6 +44,7 @@ async def get_access_token():
             raise Exception("Failed to get access token")
     return access_token
 
+
 async def make_hue_request(method, endpoint, data=None):
     token = await get_access_token()
     headers = {
@@ -67,15 +60,17 @@ async def make_hue_request(method, endpoint, data=None):
         logger.error(f"Error making request to Hue API: {e}")
         return None
 
+
 async def fetch_lights():
     global lights
     light_response = await make_hue_request("GET", "/light")
     
     if light_response and light_response.status_code == 200:
-        lights = {}
+        lights.clear()
         for light in light_response.json()['data']:
             name = light.get('metadata', {}).get('name') or light.get('id')
             lights[name] = light
+
 
 class ControlView(discord.ui.View):
     def __init__(self, device_name):
@@ -101,6 +96,7 @@ class ControlView(discord.ui.View):
         await interaction.response.send_message("Exited control mode.", ephemeral=True)
         await interaction.message.delete()
 
+
 class BrightnessModal(discord.ui.Modal, title='Change Brightness'):
     brightness = discord.ui.TextInput(label='Brightness (0-100)', placeholder='Enter a value between 0 and 100')
 
@@ -119,16 +115,13 @@ class BrightnessModal(discord.ui.Modal, title='Change Brightness'):
         except ValueError:
             await interaction.response.send_message("Please enter a valid number.", ephemeral=True)
 
-@bot.command(name='creategroup')
-async def create_group(ctx, *, group_name: str = None):
-    if group_name is None:
-        await ctx.send("Please provide a name for the group. Usage: `!creategroup <group name>`")
-        return
 
+@tree.command(name='creategroup', description="Create a new group for your Hue lights")
+async def create_group(interaction: discord.Interaction, group_name: str):
     await fetch_lights()
     
     if not lights:
-        await ctx.send("No lights found. Please make sure your Hue bridge is connected and try again.")
+        await interaction.response.send_message("No lights found. Please make sure your Hue bridge is connected and try again.", ephemeral=True)
         return
 
     embed = discord.Embed(title=f"Create Group: {group_name}", description="Select lights to add to the group:")
@@ -136,7 +129,7 @@ async def create_group(ctx, *, group_name: str = None):
     options = [discord.SelectOption(label=name, value=name) for name in lights.keys()]
     select_menu = discord.ui.Select(placeholder="Choose lights...", options=options, max_values=len(options))
     
-    async def select_callback(interaction):
+    async def select_callback(interaction: discord.Interaction):
         selected_lights = select_menu.values
         
         if not selected_lights:
@@ -155,17 +148,18 @@ async def create_group(ctx, *, group_name: str = None):
     select_menu.callback = select_callback
     view = discord.ui.View()
     view.add_item(select_menu)
-    await ctx.send(embed=embed, view=view)
+    await interaction.response.send_message(embed=embed, view=view)
 
-@bot.command(name='listgroups')
-async def list_groups(ctx):
+@tree.command(name='listgroups', description="List all groups that have been created")
+async def list_groups(interaction: discord.Interaction):
     if not groups:
-        await ctx.send("No groups have been created yet.")
+        await interaction.response.send_message("No groups have been created yet.", ephemeral=True)
     else:
         embed = discord.Embed(title="Local Groups", description="Here are the groups you've created:")
         for name, group in groups.items():
             embed.add_field(name=name, value=f"Lights: {', '.join(group['lights'])}", inline=False)
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
 async def control_device(name: str, action: str, value=None):
     device = lights.get(name) or groups.get(name)
@@ -188,8 +182,9 @@ async def control_device(name: str, action: str, value=None):
             for light_name in device['lights']:
                 await control_device(light_name, action, value)
 
-@bot.command(name='control')
-async def control(ctx):
+
+@tree.command(name='control', description="Control your Hue lights and groups")
+async def control(interaction: discord.Interaction):
     await fetch_lights()
 
     embed = discord.Embed(title="Control Your Lights and Groups", description="Select a light or group to control:")
@@ -199,7 +194,7 @@ async def control(ctx):
     
     select_menu = discord.ui.Select(placeholder="Choose a light or group...", options=options)
 
-    async def select_callback(interaction):
+    async def select_callback(interaction: discord.Interaction):
         selected_name = select_menu.values[0]
         embed_detail = discord.Embed(title=f"Controlling: {selected_name}", description=f"Controls for {selected_name}:")
         
@@ -212,10 +207,15 @@ async def control(ctx):
         await interaction.response.edit_message(embed=embed_detail, view=ControlView(selected_name))
 
     select_menu.callback = select_callback
-    await ctx.send(embed=embed, view=discord.ui.View().add_item(select_menu))
+    await interaction.response.send_message(embed=embed, view=discord.ui.View().add_item(select_menu))
+
 
 @bot.event
 async def on_ready():
     logger.info(f'{bot.user} has connected to Discord!')
+    await tree.sync()  # Sync commands with Discord
+    logger.info(f'Slash commands synced!')
+
+
 
 bot.run(DISCORD_TOKEN)
