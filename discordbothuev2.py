@@ -12,7 +12,6 @@ DISCORD_TOKEN = "Put here " #Bot Token from Discord Developer Portal
 HUE_CLIENT_ID = "Put here" #Client ID from Remote Hue API appids
 HUE_CLIENT_SECRET = "Put here" #Client Secret from Remote Hue API appids
 HUE_REFRESH_TOKEN = "Put here" #Refresh Token from Setup 1 file.
-DISCORD_CHANNEL_ID = Channel_ID  # Channel that bot will post to. Remember to not put this in quotes
 HUE_APPLICATION_KEY = "Put here" #Username from Setup 3 file.
 
 # Initialize the bot with no privileged intents
