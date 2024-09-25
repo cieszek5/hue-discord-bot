@@ -32,7 +32,7 @@ Now the discord part
 
 13. Go to General Information tab, to get APPLICATION ID.
 
-14. Go to " https://discord.com/oauth2/authorize?client_id=APPLICATION ID&permissions=2147491840&integration_type=0&scope=bot " and add bot to your server. 
+14. Go to " https://discord.com/oauth2/authorize?client_id=APPLICATION_ID&permissions=2147491840&integration_type=0&scope=bot " and add bot to your server. 
 
 
 Now the script is ready to run, if you're trying to run it in the private channel, be sure that the bot has sufficient permissions to be on that channel.
